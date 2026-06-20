@@ -174,6 +174,7 @@ def build_geometry(payload: Dict[str, Any]) -> GeometryParams:
     gp = payload.get("geometry", {}) or {}
     mode = get_sim_mode(payload)
     geo_def = GeometryParams()
+    defects = parse_defects(gp.get("defects", []))
 
     if mode == "quasi_static":
         load_velocity = gp.get("load_velocity_qs", 8e-8)
@@ -187,6 +188,7 @@ def build_geometry(payload: Dict[str, Any]) -> GeometryParams:
             total_time=float(total_time_s),
             n_steps=n_steps,
             save_every=int(gp.get("save_every", geo_def.save_every)),
+            defects=defects,
         )
     else:
         return GeometryParams(
@@ -196,7 +198,30 @@ def build_geometry(payload: Dict[str, Any]) -> GeometryParams:
             total_time=float(gp.get("total_time_wave", geo_def.total_time * 1e6) * 1e-6),
             n_steps=int(gp.get("n_steps", geo_def.n_steps)),
             save_every=int(gp.get("save_every", geo_def.save_every)),
+            defects=defects,
         )
+
+
+def parse_defects(defects_raw: Any) -> List[Dict[str, float]]:
+    """将前端传入的缺陷点格式转换为 solver 需要的格式。
+
+    前端传入: [{"x_mm": 125, "y_idx": 0, "radius_mm": 3, "initial_damage": 0.65}, ...]
+    solver 需要: [{"x_mm", "radius_mm", "initial_damage"}, ...]
+    """
+    if not isinstance(defects_raw, list):
+        return []
+    parsed: List[Dict[str, float]] = []
+    for d in defects_raw:
+        if not isinstance(d, dict):
+            continue
+        if "x_mm" not in d:
+            continue
+        parsed.append({
+            "x_mm": float(d["x_mm"]),
+            "radius_mm": float(d.get("radius_mm", d.get("width_mm", 3.0))),
+            "initial_damage": float(d.get("initial_damage", 0.65)),
+        })
+    return parsed
 
 
 def build_result_views(result: SimulationResult) -> Dict[str, Any]:

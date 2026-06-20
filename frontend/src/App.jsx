@@ -30,9 +30,11 @@ export default function App() {
   const [taskState, setTaskState] = useState(null)
   const [toast, setToast] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [defects, setDefects] = useState([])
+  const [initialDamage, setInitialDamage] = useState(0.55)
+  const [defectRadius, setDefectRadius] = useState(5.0)
 
   const simMode = params?.mode?.sim_mode || 'wave'
-  const damageModel = params?.mode?.damage_model
 
   const cancelFlagRef = useRef(false)
 
@@ -69,7 +71,12 @@ export default function App() {
   }
 
   const handleReset = () => {
-    fetchParams().then((p) => setParams(p.defaults))
+    fetchParams().then((p) => {
+      setParams(p.defaults)
+      setDefects([])
+      setInitialDamage(0.55)
+      setDefectRadius(5.0)
+    })
   }
 
   // 模式切换时重置对应的相关值
@@ -105,6 +112,18 @@ export default function App() {
     setError(null)
     setTaskState(null)
 
+    const payload = {
+      ...params,
+      geometry: {
+        ...params.geometry,
+        defects: defects.map((d) => ({
+          x_mm: d.x_mm,
+          radius_mm: d.radius_mm,
+          initial_damage: d.initial_damage,
+        })),
+      },
+    }
+
     if (shouldAsync) {
       setTaskState({
         status: 'queued',
@@ -114,7 +133,7 @@ export default function App() {
         live_stats: null,
       })
       try {
-        const init = await submitAsyncSimulation(params)
+        const init = await submitAsyncSimulation(payload)
         const taskId = init.task_id
         setTaskState({ ...init, _start: Date.now() })
         const final = await pollTaskUntilDone(
@@ -155,9 +174,12 @@ export default function App() {
     // 同步模式
     setRunning(true)
     try {
-      const r = await runSimulationFull(params)
+      const r = await runSimulationFull(payload)
       await loadViews(r)
-      showToast('仿真完成', 'success')
+      const msg = defects.length > 0
+        ? `仿真完成 · ${defects.length} 个缺陷点已计入`
+        : '仿真完成'
+      showToast(msg, 'success')
     } catch (err) {
       const m = err.response?.data?.error || err.message
       setError(m)
@@ -203,7 +225,12 @@ export default function App() {
           running={running}
           asyncRunning={taskState && ['queued', 'running'].includes(taskState.status)}
           simMode={simMode}
-          damageModel={damageModel}
+          defects={defects}
+          onDefectsChange={setDefects}
+          initialDamage={initialDamage}
+          onInitialDamageChange={setInitialDamage}
+          defectRadius={defectRadius}
+          onDefectRadiusChange={setDefectRadius}
         />
 
         {taskState && (
@@ -242,6 +269,12 @@ export default function App() {
                 : '瞬态波动 · 冲击加载'}
             </div>
             {!result && <div className="chip warn">等待仿真运行…</div>}
+            {defects.length > 0 && (
+              <div className="chip" style={{ borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.08)', color: '#fca5a5' }}>
+                <span className="chip-dot" />
+                {defects.length} 个缺陷点
+              </div>
+            )}
             {result && (
               <div className="chip">
                 <span className="chip-dot done" />
@@ -269,6 +302,9 @@ export default function App() {
                 <div>⏱ 典型 24h 仿真耗时 <b>~150ms</b></div>
                 <div>🧵 纤维随机起伏 + Kachanov 蠕变损伤演化</div>
                 <div>📡 HTTP 提交后立即返回 task_id，后台执行</div>
+                <div style={{ gridColumn: '1 / -1', color: 'var(--amber)', marginTop: 4 }}>
+                  💡 在左侧【几何与加载参数】中可点击网格添加纤维缺陷点
+                </div>
               </div>
             )}
           </div>

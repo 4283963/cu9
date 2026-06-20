@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import DefectEditor from './DefectEditor'
 
-export default function ParameterPanel({ schema, values, onChange, onRun, onReset, running, asyncRunning, simMode }) {
+export default function ParameterPanel({ schema, values, onChange, onRun, onReset, running, asyncRunning, simMode, defects, onDefectsChange, initialDamage, onInitialDamageChange, defectRadius, onDefectRadiusChange }) {
   const [expanded, setExpanded] = useState({
     mode: true, material: true, geometry: true,
   })
@@ -142,6 +143,70 @@ export default function ParameterPanel({ schema, values, onChange, onRun, onRese
           </div>
           {expanded[g.key] && schema && schema[g.key] &&
             Object.keys(schema[g.key]).map((key) => renderField(g.key, key))}
+          {g.key === 'geometry' && expanded.geometry && (
+            <div style={{ marginTop: 8 }}>
+              <div className="param-row" style={{ display: 'block' }}>
+                <div className="param-head">
+                  <span className="param-label">缺陷初始损伤强度</span>
+                  <span className="param-value">
+                    {initialDamage.toFixed(2)}
+                    <span className="param-unit">D₀</span>
+                  </span>
+                </div>
+                <div className="param-control">
+                  <input
+                    type="range" min={0.05} max={0.9} step={0.01}
+                    value={initialDamage}
+                    onChange={(e) => onInitialDamageChange(parseFloat(e.target.value))}
+                    disabled={running || asyncRunning}
+                  />
+                  <input
+                    type="number" min={0.05} max={0.9} step={0.01}
+                    value={initialDamage}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      if (!isNaN(v)) onInitialDamageChange(Math.min(0.9, Math.max(0.05, v)))
+                    }}
+                    disabled={running || asyncRunning}
+                  />
+                </div>
+              </div>
+              <div className="param-row" style={{ display: 'block' }}>
+                <div className="param-head">
+                  <span className="param-label">缺陷影响半径</span>
+                  <span className="param-value">
+                    {defectRadius.toFixed(1)}
+                    <span className="param-unit">mm</span>
+                  </span>
+                </div>
+                <div className="param-control">
+                  <input
+                    type="range" min={1} max={20} step={0.5}
+                    value={defectRadius}
+                    onChange={(e) => onDefectRadiusChange(parseFloat(e.target.value))}
+                    disabled={running || asyncRunning}
+                  />
+                  <input
+                    type="number" min={1} max={20} step={0.5}
+                    value={defectRadius}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      if (!isNaN(v)) onDefectRadiusChange(Math.min(20, Math.max(1, v)))
+                    }}
+                    disabled={running || asyncRunning}
+                  />
+                </div>
+              </div>
+              <DefectEditor
+                defects={defects}
+                onChange={onDefectsChange}
+                lengthMm={(values?.geometry?.length || 0.5) * 1000}
+                initialDamage={initialDamage}
+                radiusMm={defectRadius}
+                disabled={running || asyncRunning}
+              />
+            </div>
+          )}
         </div>
       ))}
 

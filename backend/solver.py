@@ -66,6 +66,7 @@ class GeometryParams:
     total_time: float = 4.0e-4
     n_steps: int = 8000
     save_every: int = 16
+    defects: List[Dict[str, float]] = field(default_factory=list)
 
     @property
     def dx(self) -> float:
@@ -74,6 +75,32 @@ class GeometryParams:
     @property
     def dt(self) -> float:
         return self.total_time / self.n_steps
+
+    def build_initial_damage(self, base_D: np.ndarray) -> np.ndarray:
+        """根据缺陷列表叠加初始损伤, 返回新的 D 数组。
+
+        defects 格式: [{"x_mm": 125.0, "radius_mm": 3.0, "initial_damage": 0.7}, ...]
+        """
+        D = base_D.copy()
+        if not self.defects:
+            return D
+        dx = self.dx
+        L = self.length
+        N = self.n_nodes
+        x = np.linspace(0.0, L, N)
+        x_mm = x * 1000.0
+        for df in self.defects:
+            x0_mm = float(df.get("x_mm", 0.0))
+            r_mm = float(df.get("radius_mm", 2.0))
+            d0 = float(df.get("initial_damage", 0.5))
+            d0 = max(0.0, min(0.99, d0))
+            dist_mm = np.abs(x_mm - x0_mm)
+            mask = dist_mm <= r_mm
+            # 高斯形弱化, 中心最强, 边缘平滑过渡
+            profile = np.exp(-0.5 * (dist_mm / max(r_mm * 0.5, 1e-6)) ** 2)
+            profile = profile * mask + (1.0 - mask) * 0.0
+            D = np.maximum(D, d0 * profile)
+        return D
 
 
 @dataclass
@@ -152,7 +179,11 @@ class BambooFiberSolver:
         u_prev = np.zeros(N)
         u_curr = np.zeros(N)
         D = np.zeros(N)
-        E_eff = np.full(N, mat.young_modulus)
+        D = geo.build_initial_damage(D)
+        E_eff = mat.young_modulus * (
+            mat.residual_modulus_ratio
+            + (1.0 - mat.residual_modulus_ratio) * (1.0 - D)
+        )
 
         top_disp = -geo.load_velocity * dt
         u_curr[0] = top_disp
@@ -375,6 +406,7 @@ class QuasiStaticDamageSolver:
         D = fiber_perturb
         D[D < 0.0] = 0.0
         D = D * 0.02
+        D = geo.build_initial_damage(D)
         t = 0.0
         step = 0
         t_saved = [0.0]
