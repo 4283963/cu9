@@ -62,6 +62,25 @@ export function fmt(n, digits = 2) {
   return n.toFixed(digits)
 }
 
+export function formatNumber(n, digits = 2) {
+  if (n === null || n === undefined || isNaN(n)) return '—'
+  const abs = Math.abs(n)
+  if (abs === 0) return '0'
+  if (abs >= 1e6 || abs < 1e-3) return Number(n).toExponential(2)
+  if (abs >= 1000) return n.toFixed(0)
+  if (abs >= 10) return n.toFixed(1)
+  if (abs >= 1) return n.toFixed(digits)
+  return n.toFixed(Math.max(digits, 3))
+}
+
+export function formatSci(n, digits = 2) {
+  if (n === null || n === undefined || isNaN(n)) return '—'
+  const abs = Math.abs(n)
+  if (abs === 0) return '0'
+  if (abs >= 1e4 || abs < 1e-3) return Number(n).toExponential(digits)
+  return formatNumber(n, digits)
+}
+
 export function gradientCss(stops, horizontal = true) {
   const parts = stops.map((s, i) => {
     const pct = (i / (stops.length - 1)) * 100
